@@ -328,7 +328,7 @@ def gmail_sell(message):
 1. ফরম্যাট: example@gmail.com:password
 2. Gmail সম্পূর্ণ অ্যাক্সেস সহ হতে হবে
 3. কোনো 2FA/2-Step Verification থাকা যাবে না
-4. প্রতিটি Gmail এর জন্য পাবেন ৭ টাকা
+4. প্রতিটি Gmail এর জন্য পাবেন 6 টাকা
 
 ⚠️ ভুল ফরম্যাট বা Fake Gmail দিলে টাকা দেওয়া হবে না
 
@@ -356,14 +356,14 @@ example@gmail.com:password
 
     user_id = str(message.from_user.id)
     pending_gmails[user_id] = message.text
-    users[user_id]["hold"] += 7
+    users[user_id]["hold"] += 6
     save_users()
 
     success_msg = """
 ✅ Gmail জমা দেওয়া হয়েছে!
 
 আপনার Gmail Admin এর রিভিউ এর জন্য পাঠানো হয়েছে। 
-সঠিক হলে ৭ টাকা আপনার একাউন্টে যোগ করা হবে।
+সঠিক হলে ৬ টাকা আপনার একাউন্টে যোগ করা হবে।
 
 ⏳ সর্বোচ্চ ২৪ ঘন্টার মধ্যে রিভিউ করা হবে।
 """
@@ -401,14 +401,14 @@ def callback_handler(call):
     if action == "approve":
         if user_id in pending_gmails:
             gmail = pending_gmails[user_id]
-            users[user_id]["hold"] -= 7
-            users[user_id]["balance"] += 7
+            users[user_id]["hold"] -= 6
+            users[user_id]["balance"] += 6
             
             user_msg = f"""
 ✅ আপনার Gmail অনুমোদিত হয়েছে!
 
 📧 Gmail: {gmail.split(':')[0]}
-💰 প্রাপ্ত Amount: ৭ টাকা
+💰 প্রাপ্ত Amount: ৬ টাকা
 
 আপনার নতুন ব্যালেন্স: {users[user_id]['balance']} TK
 """
@@ -422,7 +422,7 @@ def callback_handler(call):
 
     elif action == "reject":
         if user_id in pending_gmails:
-            users[user_id]["hold"] -= 7
+            users[user_id]["hold"] -= 6
             
             user_msg = """
 ❌ আপনার Gmail রিজেক্ট হয়েছে!
