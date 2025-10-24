@@ -19,7 +19,7 @@ def play_point_menu(message):
     msg = bot.send_message(message.chat.id, options, reply_markup=markup)
     bot.register_next_step_handler(msg, process_play_point_country)
 
-@bot.message_handler(func=lambda m: m.text in ["🇺🇸 USA", "🇹🇼 Taiwan", "🇬🇧 UK", "🇰🇷 South Korean"])
+@bot.mesage_handler(func=lambda m: m.text in ["🇺🇸 USA", "🇹🇼 Taiwan", "🇬🇧 UK", "🇰🇷 South Korean"])
 def process_play_point_country(message):
     if message.text == "↩️ মেনুতে ফিরে যান":
         bot.clear_step_handler(message)
