@@ -579,6 +579,266 @@ def callback_handler(call):
         # Check if all processed
         check_complete_submission(user_id)
     
+# Initialize pending_gmails as nested dictionary
+pending_gmails = defaultdict(dict)
+
+@bot.message_handler(func=lambda m: m.text == "📤 Gmail Sell")
+def gmail_sell(message):
+    instructions = """
+📧 Gmail বিক্রি করার নিয়ম:
+
+1. ফরম্যাট: example@gmail.com:password
+2. Gmail সম্পূর্ণ অ্যাক্সেস সহ হতে হবে
+3. কোনো 2FA/2-Step Verification থাকা যাবে না
+4. প্রতিটি Gmail এর জন্য পাবেন 6 টাকা
+
+⚠️ ভুল ফরম্যাট বা Fake Gmail দিলে টাকা দেওয়া হবে না
+
+এখন আপনার Gmail আইডি ও পাসওয়ার্ড দিন:
+(একাধিক Gmail দিতে চাইলে প্রতি লাইনে একটি করে দিন)
+
+উদাহরণ:
+example1@gmail.com:password1
+example2@gmail.com:password2
+"""
+    msg = bot.send_message(message.chat.id, instructions, reply_markup=back_markup())
+    bot.register_next_step_handler(msg, process_gmail_sell)
+
+def process_gmail_sell(message):
+    if message.text == "↩️ মেনুতে ফিরে যান":
+        bot.clear_step_handler(message)
+        return home_menu(message.chat.id)
+
+    user_id = str(message.from_user.id)
+    gmail_list = message.text.strip().split('\n')
+    valid_gmails = []
+    
+    for gmail in gmail_list:
+        gmail = gmail.strip()
+        if ":" in gmail and "@" in gmail:
+            valid_gmails.append({
+                "email": gmail,
+                "status": "pending"
+            })
+
+    if not valid_gmails:
+        error_msg = """
+❌ ভুল ফরম্যাট! সঠিক ফরম্যাটে দিন:
+
+example@gmail.com:password
+
+আবার চেষ্টা করুন:
+"""
+        msg = bot.send_message(message.chat.id, error_msg, reply_markup=back_markup())
+        bot.register_next_step_handler(msg, process_gmail_sell)
+        return
+    
+    # Generate unique submission ID for this batch
+    submission_id = str(uuid.uuid4())[:8]
+    
+    # Store pending gmails with submission ID
+    pending_gmails[user_id][submission_id] = {
+        "gmails": valid_gmails,
+        "timestamp": time.time()
+    }
+    
+    # Calculate total hold amount
+    total_hold = len(valid_gmails) * 6
+    users[user_id]["hold"] += total_hold
+    save_users()
+
+    success_msg = f"""
+✅ {len(valid_gmails)}টি Gmail জমা দেওয়া হয়েছে!
+
+📧 মোট Gmail: {len(valid_gmails)}টি
+💰 Hold Amount: {total_hold} TK
+
+আপনার Gmail Admin এর রিভিউ এর জন্য পাঠানো হয়েছে। 
+সঠিক হলে {total_hold} টাকা আপনার একাউন্টে যোগ করা হবে।
+
+⏳ সর্বোচ্চ ২৪ ঘন্টার মধ্যে রিভিউ করা হবে।
+"""
+    bot.send_message(message.chat.id, success_msg)
+
+    username = message.from_user.username or "NoUsername"
+    
+    admin_msg = f"""
+📧 নতুন Gmail Submission:
+
+👤 User: @{username}
+🆔 ID: {user_id}
+📅 Time: {time.strftime("%Y-%m-%d %H:%M:%S")}
+📋 Submission ID: {submission_id}
+
+👥 মোট Gmail: {len(valid_gmails)}টি
+💰 সম্ভাব্য Amount: {total_hold} TK
+"""
+    bot.send_message(ADMIN_ID, admin_msg)
+
+    # Create inline keyboard for each Gmail separately
+    for i, gmail_data in enumerate(valid_gmails):
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton("✅ Approve", callback_data=f"approve_gmail_{user_id}_{submission_id}_{i}"),
+            types.InlineKeyboardButton("❌ Reject", callback_data=f"reject_gmail_{user_id}_{submission_id}_{i}")
+        )
+        bot.send_message(ADMIN_ID, f"📧 Gmail {i+1}: {gmail_data['email']}", reply_markup=markup)
+
+def check_complete_submission(user_id, submission_id):
+    """Check if all gmails in a submission are processed"""
+    if user_id not in pending_gmails or submission_id not in pending_gmails[user_id]:
+        return
+    
+    submission = pending_gmails[user_id][submission_id]
+    all_processed = all(gmail["status"] != "pending" for gmail in submission["gmails"])
+    
+    if all_processed:
+        username = users.get(user_id, {}).get("username", "NoUsername")
+        
+        approved_count = sum(1 for g in submission["gmails"] if g["status"] == "approved")
+        rejected_count = sum(1 for g in submission["gmails"] if g["status"] == "rejected")
+        total_amount = approved_count * 6
+        
+        admin_msg = f"""
+✅ Submission {submission_id} প্রসেস সম্পন্ন!
+
+👤 User: @{username}
+🆔 User ID: {user_id}
+✅ Approved: {approved_count}টি
+❌ Rejected: {rejected_count}টি
+💰 Total Added: {total_amount} TK
+💳 Final Balance: {users[user_id]["balance"]} TK
+"""
+        bot.send_message(ADMIN_ID, admin_msg)
+        
+        # Remove this submission
+        del pending_gmails[user_id][submission_id]
+        
+        # If no more submissions for this user, remove user entry
+        if not pending_gmails[user_id]:
+            del pending_gmails[user_id]
+        
+        save_users()
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_handler(call):
+    if str(call.from_user.id) != ADMIN_ID:
+        bot.answer_callback_query(call.id, "❌ আপনার অনুমতি নেই এই কাজটি করতে!")
+        return
+
+    data = call.data.split('_')
+    action = data[0]
+    
+    if action == "approve" and data[1] == "gmail":
+        # Gmail approval system
+        user_id = str(data[2])
+        submission_id = str(data[3])
+        gmail_index = int(data[4])
+        
+        if (user_id not in pending_gmails or 
+            submission_id not in pending_gmails[user_id] or 
+            gmail_index >= len(pending_gmails[user_id][submission_id]["gmails"])):
+            bot.answer_callback_query(call.id, "❌ Gmail not found!")
+            return
+        
+        submission = pending_gmails[user_id][submission_id]
+        gmail_data = submission["gmails"][gmail_index]
+        
+        # Check if already approved/rejected
+        if gmail_data["status"] != "pending":
+            bot.answer_callback_query(call.id, f"❌ Already {gmail_data['status']}!")    
+            return
+        
+        gmail = gmail_data["email"]
+        
+        # Remove hold and add to balance
+        users[user_id]["hold"] -= 6
+        users[user_id]["balance"] += 6
+        
+        # Update status
+        pending_gmails[user_id][submission_id]["gmails"][gmail_index]["status"] = "approved"
+        
+        user_msg = f"""
+✅ আপনার Gmail অনুমোদিত হয়েছে!
+
+📧 Gmail: {gmail.split(':')[0]}
+💰 প্রাপ্ত Amount: ৬ টাকা
+
+আপনার নতুন ব্যালেন্স: {users[user_id]['balance']} TK
+"""
+        bot.send_message(user_id, user_msg)
+        bot.answer_callback_query(call.id, "✅ Gmail Approved")
+        
+        # Update the message to show it's approved
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"✅ APPROVED: {gmail}",
+            reply_markup=None
+        )
+        
+        save_users()
+        
+        # Check if all processed in this submission
+        check_complete_submission(user_id, submission_id)
+    
+    elif action == "reject" and data[1] == "gmail":
+        # Gmail rejection system
+        user_id = str(data[2])
+        submission_id = str(data[3])
+        gmail_index = int(data[4])
+        
+        if (user_id not in pending_gmails or 
+            submission_id not in pending_gmails[user_id] or 
+            gmail_index >= len(pending_gmails[user_id][submission_id]["gmails"])):
+            bot.answer_callback_query(call.id, "❌ Gmail not found!")
+            return
+        
+        submission = pending_gmails[user_id][submission_id]
+        gmail_data = submission["gmails"][gmail_index]
+        
+        # Check if already approved/rejected
+        if gmail_data["status"] != "pending":
+            bot.answer_callback_query(call.id, f"❌ Already {gmail_data['status']}!")    
+            return
+        
+        gmail = gmail_data["email"]
+        
+        # Remove hold only
+        users[user_id]["hold"] -= 6
+        
+        # Update status
+        pending_gmails[user_id][submission_id]["gmails"][gmail_index]["status"] = "rejected"
+        
+        user_msg = f"""
+❌ আপনার Gmail রিজেক্ট হয়েছে!
+
+📧 Gmail: {gmail.split(':')[0]}
+💰 Hold রিমুভ: ৬ টাকা
+
+কারণ: 
+- ভুল ফরম্যাট
+- Fake বা অচল Gmail
+- 2FA enabled
+
+আরও তথ্যের জন্য সাপোর্টে যোগাযোগ করুন।
+"""
+        bot.send_message(user_id, user_msg)
+        bot.answer_callback_query(call.id, "❌ Gmail Rejected")
+        
+        # Update the message to show it's rejected
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"❌ REJECTED: {gmail}",
+            reply_markup=None
+        )
+        
+        save_users()
+        
+        # Check if all processed in this submission
+        check_complete_submission(user_id, submission_id)
+    
     elif action == "pay":
         amount = int(data[2])
         user_id = str(data[1])
@@ -590,7 +850,7 @@ def callback_handler(call):
 💰 Amount: {amount} TK
 📊 নতুন ব্যালেন্স: {users[user_id]['balance']} TK
 
-টাকা ১-২ ঘন্টার মধ্যে আপনার অ্যাকাউন্টে যোগ হবে。
+টাকা ১-২ ঘন্টার মধ্যে আপনার অ্যাকাউন্টে যোগ হবে।
 """
         bot.send_message(user_id, user_msg)
         bot.answer_callback_query(call.id, "✅ Payment sent")
