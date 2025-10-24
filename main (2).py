@@ -1,3 +1,150 @@
+import telebot
+from telebot import types
+import time
+import json
+import os
+import uuid
+from collections import defaultdict
+
+TOKEN = '8204693585:AAHo3H_NsANMskc9ubQICp2MKP6H-K0dcdg'
+ADMIN_ID = '7943354448'
+ADMIN_BKASH_NO = '01774049543'
+ADMIN_NAGAD_NO = '01774049543'
+BOT_USERNAME = "sohojbuysellbdbot"
+
+bot = telebot.TeleBot(TOKEN)
+users = {}
+pending_gmails = {}
+orders = {}
+
+# --- Data Persistence Functions ---
+def save_users():
+    """Saves the users data to a JSON file."""
+    try:
+        with open('users.json', 'w', encoding='utf-8') as f:
+            json.dump(users, f, indent=4)
+        print("Users data saved successfully.")
+    except Exception as e:
+        print(f"Error saving users data: {e}")
+
+def load_users():
+    """Loads users data from a JSON file."""
+    global users
+    if os.path.exists('users.json'):
+        try:
+            with open('users.json', 'r', encoding='utf-8') as f:
+                users = json.load(f)
+            print("Users data loaded successfully.")
+        except json.JSONDecodeError:
+            print("Corrupted users.json file. Starting with empty data.")
+            users = {}
+    else:
+        print("users.json not found. Creating a new one.")
+        users = {}
+# --- End of Data Persistence Functions ---
+
+# --- Bot Initialization ---
+load_users()
+# --- End of Bot Initialization ---
+
+LOGO = """
+╔═════════════════════════╗
+║    🛒 Sohoj Buy Sell BD    ║
+╚═════════════════════════╝
+
+🌟 আপনার ডিজিটাল সার্ভিসের বিশ্বস্ত পার্টনার 🌟
+"""
+
+def home_menu(chat_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    buttons = [
+        "📤 Gmail Sell", "📥 Gmail Buy", "📞 Twillo Sid Buy",
+        "💳 Balance", "💵 Withdraw",
+        "🌐 Paid VPN Buy", "🎥 YouTube Premium",
+        "👥 Refer", "🆘 Support",
+        "🎁 Play Point Park On"
+    ]
+    markup.add(*buttons)
+    
+    user_info = ""
+    if str(chat_id) in users:
+        user = users[str(chat_id)]
+        user_info = f"\n👤 User: @{user['username'] or 'NoUsername'}\n💰 Balance: {user['balance']} TK"
+    
+    welcome_msg = f"""
+{LOGO}
+{user_info}
+
+🎯 নিচের মেনু থেকে সেবা নির্বাচন করুন:
+"""
+    bot.send_message(chat_id, welcome_msg, reply_markup=markup)
+
+def back_markup():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("↩️ মেনুতে ফিরে যান")
+    return markup
+
+def payment_markup():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup.add("📲 Bkash", "📲 Nagad", "↩️ মেনুতে ফিরে যান")
+    return markup
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.send_message(message.chat.id, LOGO)
+    time.sleep(0.5)
+
+    user_id = str(message.from_user.id)
+    
+    is_new_user = user_id not in users
+
+    if is_new_user:
+        users[user_id] = {
+            "username": message.from_user.username,
+            "balance": 0,
+            "hold": 0,
+            "referral_count": 0,
+            "referred_users": [],
+            "joined_date": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        save_users()
+
+    if len(message.text.split()) > 1:
+        referrer_id_str = message.text.split()[1]
+        try:
+            if referrer_id_str in users and referrer_id_str != user_id:
+                if user_id not in users[referrer_id_str]["referred_users"]:
+                    users[referrer_id_str]["balance"] += 2
+                    users[referrer_id_str]["referral_count"] += 1
+                    users[referrer_id_str]["referred_users"].append(user_id)
+                    bot.send_message(referrer_id_str, f"🎉 আপনি ২ টাকা পেয়েছেন রেফার বোনাস হিসেবে! নতুন ইউজার: @{message.from_user.username or 'NoUsername'}")
+                    save_users()
+        except ValueError:
+            pass
+
+    welcome_msg = f"""
+✨ স্বাগতম {message.from_user.first_name}!
+
+ডিজিটাল Sohoj Buy Sell BD বটে আপনাকে স্বাগতম! 🎉
+
+🔹 Gmail বিক্রি/ক্রয়
+🔹 Premium VPN সার্ভিস
+🔹 Twillo Sid Buy
+🔹 YouTube Premium অ্যাকাউন্ট
+🔹 রেফার প্রোগ্রাম
+🔹 Play Point Park On
+
+💼 আপনার একাউন্ট ডিটেইলস:
+💰 ব্যালেন্স: {users[user_id]['balance']} টাকা
+👥 রেফার্ড ইউজার: {users[user_id]['referral_count']} জন
+
+নিচের মেনু থেকে আপনার পছন্দের সেবা নির্বাচন করুন:
+"""
+    bot.send_message(message.chat.id, welcome_msg)
+    time.sleep(1)
+    home_menu(message.chat.id)
+
+@bot.message_handler(func=lambda m: m.text == "↩️ মেনুতে ফিরে যান")
 def back_to_home(message):
     bot.clear_step_handler(message)
     home_menu(message.chat.id)
@@ -19,7 +166,6 @@ def play_point_menu(message):
     msg = bot.send_message(message.chat.id, options, reply_markup=markup)
     bot.register_next_step_handler(msg, process_play_point_country)
 
-@bot.mesage_handler(func=lambda m: m.text in ["🇺🇸 USA", "🇹🇼 Taiwan", "🇬🇧 UK", "🇰🇷 South Korean"])
 def process_play_point_country(message):
     if message.text == "↩️ মেনুতে ফিরে যান":
         bot.clear_step_handler(message)
@@ -422,16 +568,6 @@ def callback_handler(call):
 - ভুল ফরম্যাট
 - Fake বা অচল Gmail
 - 2FA enabled
-
-আরও তথ্যের জন্য সাপোর্টে যোগাযোগ করুন。
-"""
-        bot.send_message(user_id, user_msg)
-        bot.answer_callback_query(call.id, "❌ Gmail Rejected")
-        save_users()
-        
-        # Check if all processed
-        check_complete_submission(user_id)
-    
 # Initialize pending_gmails as nested dictionary
 pending_gmails = defaultdict(dict)
 
@@ -759,11 +895,6 @@ def select_gmail_type(message):
     
     # Store the selected Gmail type
     user_id = str(message.from_user.id)
-    
-    # Initialize user data if not exists
-    if user_id not in users:
-        users[user_id] = {}
-    
     users[user_id]["gmail_type"] = message.text
     
     quantity_msg = f"""
@@ -785,20 +916,9 @@ def process_gmail_quantity(message):
             raise ValueError
 
         user_id = str(message.from_user.id)    
-        
-        # Check if user data exists and has gmail_type
-        if user_id not in users or "gmail_type" not in users[user_id]:
-            bot.send_message(message.chat.id, "❌ Gmail টাইপ সিলেক্ট করা হয়নি। আবার চেষ্টা করুন।")
-            return gmail_buy(message)
-            
         gmail_type = users[user_id]["gmail_type"]    
         
-        # Correct price calculation
-        if "USA" in gmail_type:
-            base_price = 15
-        else:
-            base_price = 10
-            
+        base_price = 15 if "USA" in gmail_type else 10
         price = base_price * quantity
         
         if quantity >= 10:
@@ -845,12 +965,6 @@ def process_gmail_payment(message):
         return home_menu(message.chat.id)
 
     user_id = str(message.from_user.id)
-    
-    # Check if user data exists
-    if user_id not in users or "gmail_type" not in users[user_id]:
-        bot.send_message(message.chat.id, "❌ অর্ডার তথ্য পাওয়া যায়নি। আবার চেষ্টা করুন।")
-        return home_menu(message.chat.id)
-        
     user_data = users[user_id]
 
     method = "Bkash" if "Bkash" in message.text else "Nagad"
@@ -882,12 +996,7 @@ def confirm_gmail_order(message, method, price, gmail_type, quantity):
     user_id = str(message.from_user.id)
 
     order_id = f"GMAIL{int(time.time())}{user_id}"
-    
-    # Initialize orders dictionary if not exists
-    if not hasattr(confirm_gmail_order, 'orders'):
-        confirm_gmail_order.orders = {}
-    
-    confirm_gmail_order.orders[order_id] = {
+    orders[order_id] = {
         "user_id": user_id,
         "service": "Gmail",
         "type": gmail_type,
@@ -931,7 +1040,6 @@ def confirm_gmail_order(message, method, price, gmail_type, quantity):
 """
     bot.send_message(message.chat.id, user_confirmation)
     home_menu(message.chat.id)
-
 
 @bot.message_handler(func=lambda m: m.text == "💳 Balance")
 def check_balance(message):
@@ -979,7 +1087,7 @@ def withdraw(message):
 🎯 প্রয়োজন: {60 - balance} TK more
 
 💡 টাকা উপার্জনের উপায়:
-1. Gmail বিক্রি করুন (৭ TK/Gmail)
+1. Gmail বিক্রি করুন (৬ TK/Gmail)
 2. বন্ধুদের রেফার করুন (২ TK/Referral)
 """
             bot.send_message(message.chat.id, error_msg)
@@ -1130,20 +1238,42 @@ def vpn_buy(message):
     vpn_options = """
 🔒 VPN প্যাকেজ নির্বাচন করুন:
 
-NordVPN 7 Days (30TK)
+NordVPN 7 Days (40TK)
 - উচ্চ গতি
 - 60+ দেশ
 - No Logs Policy
 
-ExpressVPN 7 Days (30TK)
+ExpressVPN 7 Days (40TK)
 - সর্বোচ্চ গতি
 - 90+ দেশ
 - TrustedServer Technology
 
-💡 উভয় VPN Premium quality এর
+HMA VPN 7 Days (40TK)
+- Global coverage
+- Fast speeds
+- Secure connection
+
+PIA VPN 7 Days (40TK)
+- Private Internet Access
+- Multiple devices
+- Strong encryption
+
+Ipvanis VPN 7 Days (40TK)
+- Premium service
+- Reliable connection
+- Global servers
+
+💡 সবগুলো VPN Premium quality এর
 """
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    markup.add("NordVPN 7 Days (30TK)", "ExpressVPN 7 Days (30TK)", "↩️ মেনুতে ফিরে যান")
+    markup.add(
+        "NordVPN 7 Days (40TK)", 
+        "ExpressVPN 7 Days (40TK)",
+        "HMA VPN 7 Days (40TK)",
+        "PIA VPN 7 Days (40TK)", 
+        "Ipvanis VPN 7 Days (40TK)",
+        "↩️ মেনুতে ফিরে যান"
+    )
     msg = bot.send_message(message.chat.id, vpn_options, reply_markup=markup)
     bot.register_next_step_handler(msg, select_vpn_type)
 
@@ -1161,7 +1291,7 @@ def select_vpn_type(message):
 📝 অর্র্ডার সারাংশ:
 
 🔒 Service: {message.text}
-💰 মূল্য: 30 TK
+💰 মূল্য: 40 TK
 
 💳 পেমেন্ট মাধ্যম নির্বাচন করুন:
 """
@@ -1180,7 +1310,7 @@ def process_vpn_payment(message):
 💳 {method} এ টাকা পাঠান:
 
 📱 Number: {payment_number}
-💰 Amount: 30 TK
+💰 Amount: 40 TK
 📝 Reference: VPN
 
 ⚠️ টাকা পাঠানোর পর Transaction ID নোট করে রাখুন
@@ -1204,7 +1334,7 @@ def confirm_vpn_order(message, method):
         "user_id": user_id,
         "service": "VPN",
         "type": vpn,
-        "price": 30,
+        "price": 40,
         "method": method,
         "txn_id": txn_id,
         "status": "pending"
@@ -1220,7 +1350,7 @@ def confirm_vpn_order(message, method):
 👤 User: @{message.from_user.username or 'N/A'}
 🆔 User ID: {user_id}
 🔒 VPN: {vpn}
-💰 Amount: 30 TK
+💰 Amount: 40 TK
 💳 Method: {method}
 📝 Txn ID: {txn_id}
 ⏰ Time: {time.strftime("%Y-%m-%d %H:%M:%S")}
@@ -1232,7 +1362,7 @@ def confirm_vpn_order(message, method):
 
 📦 Order ID: {order_id}
 🔒 Service: {vpn}
-💰 Paid: 30 TK
+💰 Paid: 40 TK
 
 আপনার অর্র্ডারটি প্রসেস করা হচ্ছে। 
 ডেলিভারি সময়: ১-৬ ঘন্টা
@@ -1241,7 +1371,6 @@ def confirm_vpn_order(message, method):
 """
     bot.send_message(message.chat.id, user_confirmation)
     home_menu(message.chat.id)
-
 
 @bot.message_handler(func=lambda m: m.text == "🎥 YouTube Premium")
 def yt_premium(message):
@@ -1265,7 +1394,6 @@ def yt_premium(message):
     msg = bot.send_message(message.chat.id, yt_options, reply_markup=markup)
     bot.register_next_step_handler(msg, select_yt_plan)
 
-@bot.message_handler(func=lambda m: m.text in ["1 Month (25TK)", "1 Year (150TK)"])
 def select_yt_plan(message):
     if message.text == "↩️ মেনুতে ফিরে যান":
         bot.clear_step_handler(message)
@@ -2788,3 +2916,6 @@ def handle_all_messages(message):
 if __name__ == "__main__":
     print("🤖 Bot is running...")
     bot.infinity_polling()
+
+
+amar ai bot e 2 ta somossa pawa gese jodi aksathe gmail sell dey sei sobgulai approved reject kora jai kintu jodi user 1 ta kore gmail sell dey ber ber tahole seita sudhu 1 ta approved reject kora jai baki gula kaj hoina not found dekhai approved reject korle gele ar usa gmail buy korte gele spnkha lekhar por bd gmail er gula chole ase payment  thik kore full code bana den
