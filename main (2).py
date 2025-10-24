@@ -906,6 +906,11 @@ def select_gmail_type(message):
     
     # Store the selected Gmail type
     user_id = str(message.from_user.id)
+    
+    # Initialize user data if not exists
+    if user_id not in users:
+        users[user_id] = {}
+    
     users[user_id]["gmail_type"] = message.text
     
     quantity_msg = f"""
@@ -927,9 +932,20 @@ def process_gmail_quantity(message):
             raise ValueError
 
         user_id = str(message.from_user.id)    
+        
+        # Check if user data exists and has gmail_type
+        if user_id not in users or "gmail_type" not in users[user_id]:
+            bot.send_message(message.chat.id, "❌ Gmail টাইপ সিলেক্ট করা হয়নি। আবার চেষ্টা করুন।")
+            return gmail_buy(message)
+            
         gmail_type = users[user_id]["gmail_type"]    
         
-        base_price = 15 if "USA" in gmail_type else 10
+        # Correct price calculation
+        if "USA" in gmail_type:
+            base_price = 15
+        else:
+            base_price = 10
+            
         price = base_price * quantity
         
         if quantity >= 10:
@@ -970,13 +986,18 @@ def process_gmail_quantity(message):
         msg = bot.send_message(message.chat.id, error_msg, reply_markup=back_markup())
         bot.register_next_step_handler(msg, process_gmail_quantity)
 
-@bot.message_handler(func=lambda m: m.text in ["📲 Bkash", "📲 Nagad"])
 def process_gmail_payment(message):
     if message.text == "↩️ মেনুতে ফিরে যান":
         bot.clear_step_handler(message)
         return home_menu(message.chat.id)
 
     user_id = str(message.from_user.id)
+    
+    # Check if user data exists
+    if user_id not in users or "gmail_type" not in users[user_id]:
+        bot.send_message(message.chat.id, "❌ অর্ডার তথ্য পাওয়া যায়নি। আবার চেষ্টা করুন।")
+        return home_menu(message.chat.id)
+        
     user_data = users[user_id]
 
     method = "Bkash" if "Bkash" in message.text else "Nagad"
@@ -1008,7 +1029,12 @@ def confirm_gmail_order(message, method, price, gmail_type, quantity):
     user_id = str(message.from_user.id)
 
     order_id = f"GMAIL{int(time.time())}{user_id}"
-    orders[order_id] = {
+    
+    # Initialize orders dictionary if not exists
+    if not hasattr(confirm_gmail_order, 'orders'):
+        confirm_gmail_order.orders = {}
+    
+    confirm_gmail_order.orders[order_id] = {
         "user_id": user_id,
         "service": "Gmail",
         "type": gmail_type,
