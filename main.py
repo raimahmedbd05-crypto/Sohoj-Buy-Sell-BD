@@ -7,12 +7,12 @@ import uuid
 from collections import defaultdict
 
 # --- Configuration ---
-TOKEN = '8204693585:AAHo3H_NsANMskc9ubQICp2MKP6H-K0dcdg'
+TOKEN = '8426608876:AAEH3RsgifQP9buKAK0uQAs8kBR6MIMygNY'
 ADMIN_ID = '8118743556'
-ADMIN_USERNAME = 'Raimadmin' # Added for block message
+ADMIN_USERNAME = 'RAIM_AHMED' # Added for block message
 ADMIN_BKASH_NO = '01774049543'
 ADMIN_NAGAD_NO = '01774049543'
-BOT_USERNAME = "sohojbuysellbdbot"
+BOT_USERNAME = "Digital_Easy_Partner_BOT"
 
 # Note: The TeleBot instance should be created after defining the token
 bot = telebot.TeleBot(TOKEN)
@@ -142,10 +142,10 @@ load_data()
 
 LOGO = """
 ╔═════════════════════════╗
-║     🛒 Sohoj Buy Sell BD     ║
+║     🛒 Digital Easy Partner    ║
 ╚═════════════════════════╝
 
-🌟 আপনার ডিজিটাল সার্ভিসের বিশ্বস্ত পার্টনার 🌟
+🌟আপনার ডিজিটাল সার্ভিসের বিশ্বস্ত পার্টনার🌟
 """
 
 # --- Utility Markups ---
@@ -2827,4 +2827,5 @@ def handle_all_messages(message):
 
 if __name__ == "__main__":
     print("🤖 Bot is running...")
+
     bot.infinity_polling()
